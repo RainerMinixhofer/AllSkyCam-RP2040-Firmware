@@ -1,4 +1,4 @@
-# AllSkyCam RP2040Zero Controller (PlatformIO Draft)
+# AllSkyCam RP2040Zero Controller
 
 This project is a draft firmware structure for an RP2040Zero controller connected to:
 
@@ -12,7 +12,8 @@ This project is a draft firmware structure for an RP2040Zero controller connecte
 Implementation notes:
 
 - TMC2209 UART framing/CRC follows the same 8-byte write / 4-byte read-request / 8-byte read-response pattern used in the reference project at [TMC2209/](/home/rainer/Projects/Breakout-Demos/TMC2209).
-- Build is currently configured against PlatformIO RP2040 Arduino-mbed. For non-default pin mappings, modules instantiate dedicated UART/I2C objects on the required GPIOs.
+- Build is configured against PlatformIO RP2040 Arduino-mbed. For non-default pin mappings, modules instantiate dedicated UART/I2C objects on the required GPIOs.
+- MCP23017 default address in firmware is currently `0x27` (decimal `39`).
 
 ## Pin map
 
@@ -39,7 +40,7 @@ Implementation notes:
 - [thermal_camera_mlx90640.hpp](./src/modules/thermal_camera_mlx90640.hpp): MLX interface placeholder
 - [usb_protocol.hpp](./src/modules/usb_protocol.hpp): USB CDC command protocol
 
-## USB CDC command draft
+## USB CDC commands
 
 - `HELP`
 - `GET STATUS`
@@ -78,6 +79,12 @@ Command replies are JSON, e.g.:
 
 ```bash
 platformio run --environment rp2040_zero
+```
+
+Upload:
+
+```bash
+platformio run --environment rp2040_zero --target upload
 ```
 
 ## USB CDC smoke test (Python)
@@ -124,6 +131,12 @@ Notes:
 python3 tools/test_usb_cdc.py --startup-timeout 12
 ```
 
+The smoke test includes:
+- status schema validation
+- power/dew/driver control roundtrip
+- TMC read check
+- MCP23017 test command check
+
 ## Geiger statistics soak logging + visualization
 
 Install dependencies:
@@ -164,8 +177,36 @@ Start local dashboard:
 python3 tools/usb_webfrontend.py --port /dev/ttyACM0
 ```
 
+or auto-detect:
+
+```bash
+python3 tools/usb_webfrontend.py
+```
+
 Then open:
 
 ```text
 http://127.0.0.1:8765
 ```
+
+## Known warnings / pitfalls
+
+- **Linker warnings `_getpid/_kill`**  
+  These were addressed by [syscalls_stubs.c](./src/syscalls_stubs.c). If they reappear, ensure this file is still compiled in the environment.
+
+- **Linux upload warning about `99-platformio-udev.rules`**  
+  Install PlatformIO udev rules as documented here:  
+  <https://docs.platformio.org/en/latest/core/installation/udev-rules.html>
+
+- **`No new RPxxxx device found yet` during upload reset**  
+  This can still appear transiently on Linux. If upload proceeds (`Loading into Flash`), it is usually harmless.
+
+- **Serial port changed after flashing**  
+  RP2040 can re-enumerate from `/dev/ttyACM0` to `/dev/ttyACM1` (or vice versa).  
+  Prefer auto-detection in tools, or re-check with:
+  ```bash
+  ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null
+  ```
+
+- **Port contention (`device disconnected or multiple access on port`)**  
+  Close other serial clients (PlatformIO monitor, minicom, screen, another tool instance) before running test scripts or web frontend.
